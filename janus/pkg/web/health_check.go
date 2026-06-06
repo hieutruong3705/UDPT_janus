@@ -4,28 +4,26 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/hellofresh/janus/pkg/proxy/balancer" // Gọi anh Bảo vệ vào
+	log "github.com/sirupsen/logrus"
 )
 
-// HealthInfo lưu thông tin trạng thái của 1 service
 type HealthInfo struct {
 	Status  string `json:"status"`
 	Latency string `json:"latency,omitempty"`
 }
 
-// targetServices chứa danh sách các microservice cần monitor
-// Để đơn giản cho BTL, chúng ta định nghĩa sẵn các node
 var targetServices = map[string]string{
-	"order-service":   "http://order-service:9003",
-	"product-service": "http://product-service:9002",
-	"user-service":    "http://user-service:9001",
+	"user-service":      "http://user-service:9001/users",
+	"product-service-1": "http://product-service-1:9002/products",
+	"product-service-2": "http://product-service-2:9002/products",
+	"order-service-1":   "http://order-service-1:9003/orders",
+	"order-service-2":   "http://order-service-2:9003/orders",
 }
 
-// checkService thực hiện ping đến service và đo độ trễ
 func checkService(url string) HealthInfo {
-	client := http.Client{
-		Timeout: 2 * time.Second, // Timeout ngắn để Gateway không bị treo
-	}
-
+	client := http.Client{Timeout: 1 * time.Second}
 	start := time.Now()
 	resp, err := client.Get(url)
 	latency := time.Since(start).Round(time.Millisecond).String()
@@ -35,28 +33,61 @@ func checkService(url string) HealthInfo {
 	}
 	defer resp.Body.Close()
 
-	return HealthInfo{
-		Status:  "UP",
-		Latency: latency,
-	}
+	return HealthInfo{Status: "UP", Latency: latency}
 }
 
-// HealthCheckHandler là endpoint sẽ được gọi từ Admin API
+func StartActiveHealthCheck() {
+	// Ghi trạng thái ban đầu vào sổ tay của balancer
+	for name := range targetServices {
+		balancer.HealthMutex.Lock()
+		balancer.ActiveNodes[name] = true
+		balancer.HealthMutex.Unlock()
+	}
+
+	go func() {
+		log.Info("[Health Check] Starting background monitoring...")
+
+		for {
+			for name, url := range targetServices {
+				info := checkService(url)
+				isAlive := (info.Status == "UP")
+
+				// Mượn sổ tay của balancer để ghi chép
+				balancer.HealthMutex.Lock()
+				wasAlive := balancer.ActiveNodes[name]
+				balancer.ActiveNodes[name] = isAlive
+				balancer.HealthMutex.Unlock()
+
+				if wasAlive && !isAlive {
+					log.Warnf("[Health Check] FAILURE: %s is unreachable. Marked as DOWN.", name)
+				} else if !wasAlive && isAlive {
+					log.Infof("[Health Check] RECOVERY: %s is back online.", name)
+				}
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}()
+}
+
 func HealthCheckHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		results := make(map[string]HealthInfo)
-		for name, url := range targetServices {
-			results[name] = checkService(url)
+		results := make(map[string]string)
+
+		// Đọc trực tiếp từ sổ tay của balancer
+		balancer.HealthMutex.RLock()
+		for name, isAlive := range balancer.ActiveNodes {
+			if isAlive {
+				results[name] = "UP"
+			} else {
+				results[name] = "DOWN"
+			}
 		}
+		balancer.HealthMutex.RUnlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		prettyJSON, err := json.MarshalIndent(results, "", "  ")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		prettyJSON, _ := json.MarshalIndent(results, "", "  ")
 		w.Write(prettyJSON)
 	}
 }

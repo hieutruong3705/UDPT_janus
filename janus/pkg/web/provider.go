@@ -53,7 +53,7 @@ func (s *Server) Start() error {
 
 	s.AddRoutes(r)
 	plugin.EmitEvent(plugin.AdminAPIStartupEvent, plugin.OnAdminAPIStartup{Router: r})
-
+	StartActiveHealthCheck()
 	return nil
 }
 
