@@ -20,10 +20,16 @@
                 "DELETE"
             ]
         },
-        "rate_limit": {
-            "enabled": true,
-            "limit": "3-M"
-        }
+        "plugins": [
+            {
+                "name": "rate_limit",
+                "enabled": true,
+                "config": {
+                    "limit": "3-M",
+                    "policy": "local"
+                }
+            }
+        ]
     },
     {
         "name": "product-api",
@@ -45,7 +51,19 @@
                 "PUT",
                 "DELETE"
             ]
-        }
+        },
+        "plugins": [
+            {
+                "name": "cb",
+                "enabled": true,
+                "config": {
+                    "timeout": 1000,
+                    "error_percent_threshold": 50,
+                    "request_volume_threshold": 3,
+                    "sleep_window": 5000
+                }
+            }
+        ]
     },
     {
         "name": "order-api",
@@ -63,10 +81,14 @@
             },
             "methods": [
                 "GET",
-                "POST",
-                "PUT",
-                "DELETE"
+                "POST"
             ]
-        }
+        },
+        "plugins": [
+            {
+                "name": "basic_auth",
+                "enabled": true
+            }
+        ]
     }
 ]
