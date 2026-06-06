@@ -88,6 +88,7 @@ func (s *Server) addInternalPublicRoutes(r router.Router) {
 	r.GET("/", Home())
 	r.GET("/status", NewOverviewHandler(s.apiHandler.Cfgs))
 	r.GET("/status/{name}", NewStatusHandler(s.apiHandler.Cfgs))
+	r.GET("/health", HealthCheckHandler())
 	if obs.PrometheusExporter != nil {
 		r.Any("/metrics", obs.PrometheusExporter.ServeHTTP)
 	}
