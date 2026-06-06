@@ -11,7 +11,7 @@ func users(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"service": "user-service",
 		"users": []string{
-			"Hieu",
+			"Hai",
 			"An",
 			"Binh",
 		},
