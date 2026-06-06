@@ -1,0 +1,5 @@
+{
+    "root": "docs",
+    "title": "Janus docs",
+    "plugins": ["codetabs"]
+}
