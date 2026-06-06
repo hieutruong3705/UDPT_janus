@@ -1,0 +1,27 @@
+services:
+  user-service:
+    build: ./user-service
+    ports:
+      - "9001:9001"
+
+  product-service:
+    build: ./product-service
+    ports:
+      - "9002:9002"
+
+  order-service:
+    build: ./order-service
+    ports:
+      - "9003:9003"
+
+  janus-gateway:
+    build: ../janus
+    ports:
+      - "8888:8080"
+      - "8081:8081"
+    volumes:
+      - ./janus-config:/etc/janus
+    depends_on:
+      - user-service
+      - product-service
+      - order-service

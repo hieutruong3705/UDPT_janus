@@ -1,0 +1,8 @@
+[web]
+port = 8080
+
+[admin]
+port = 8081
+
+[database]
+dsn = "file:///etc/janus"

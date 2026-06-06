@@ -1,0 +1,72 @@
+[
+    {
+        "name": "user-api",
+        "active": true,
+        "proxy": {
+            "listen_path": "/users",
+            "strip_path": false,
+            "upstreams": {
+                "balancing": "roundrobin",
+                "targets": [
+                    {
+                        "target": "http://user-service:9001"
+                    }
+                ]
+            },
+            "methods": [
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE"
+            ]
+        },
+        "rate_limit": {
+            "enabled": true,
+            "limit": "3-M"
+        }
+    },
+    {
+        "name": "product-api",
+        "active": true,
+        "proxy": {
+            "listen_path": "/products",
+            "strip_path": false,
+            "upstreams": {
+                "balancing": "roundrobin",
+                "targets": [
+                    {
+                        "target": "http://product-service:9002"
+                    }
+                ]
+            },
+            "methods": [
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE"
+            ]
+        }
+    },
+    {
+        "name": "order-api",
+        "active": true,
+        "proxy": {
+            "listen_path": "/orders",
+            "strip_path": false,
+            "upstreams": {
+                "balancing": "roundrobin",
+                "targets": [
+                    {
+                        "target": "http://order-service:9003"
+                    }
+                ]
+            },
+            "methods": [
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE"
+            ]
+        }
+    }
+]
