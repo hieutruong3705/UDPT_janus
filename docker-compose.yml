@@ -1,28 +1,68 @@
+version: '3.8' # (Có thể có hoặc không tùy file của bạn)
+
 services:
+  registry-service:
+    build: ./registry-service
+    ports:
+      - "8500:8080"
+
   user-service:
     build: ./user-service
     ports:
       - "9001:9001"
+# ... (các phần dưới giữ nguyên)
+    environment:
+      - REGISTRY_URL=http://registry-service:8080/api/register
+      - SERVICE_HOST=user-service
+      - SERVICE_PORT=9001
+    depends_on:
+      - registry-service
 
   product-service-1:
     build: ./product-service
     ports:
       - "9002:9002"
+    environment:
+      - REGISTRY_URL=http://registry-service:8080/api/register
+      - SERVICE_HOST=product-service-1
+      - SERVICE_PORT=9002
+    depends_on:
+      - registry-service
 
   product-service-2:
     build: ./product-service
     ports:
       - "9022:9002"
+    environment:
+      - REGISTRY_URL=http://registry-service:8080/api/register
+      - SERVICE_HOST=product-service-2
+      # LƯU Ý: Vẫn dùng cổng 9002 vì đây là cổng nội bộ (internal) mà code Go đang chạy
+      - SERVICE_PORT=9002 
+    depends_on:
+      - registry-service
 
   order-service-1:
     build: ./order-service
     ports:
       - "9003:9003"
+    environment:
+      - REGISTRY_URL=http://registry-service:8080/api/register
+      - SERVICE_HOST=order-service-1
+      - SERVICE_PORT=9003
+    depends_on:
+      - registry-service
 
   order-service-2:
     build: ./order-service
     ports:
       - "9033:9003"
+    environment:
+      - REGISTRY_URL=http://registry-service:8080/api/register
+      - SERVICE_HOST=order-service-2
+      # LƯU Ý: Tương tự, cổng nội bộ vẫn là 9003
+      - SERVICE_PORT=9003
+    depends_on:
+      - registry-service
 
   janus-gateway:
     build: ./janus
@@ -32,6 +72,7 @@ services:
     volumes:
       - ./janus-config:/etc/janus
     depends_on:
+      - registry-service
       - user-service
       - product-service-1
       - product-service-2
