@@ -3,27 +3,61 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"os" // Thêm thư viện os để đọc biến môi trường
+	"os"
+	"sync"
+	"time"
+)
+
+var (
+	stressMu      sync.Mutex
+	stressPayload [][]byte
 )
 
 func products(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"service": "product-service",
-		"products": []string{ // Đổi tên key thành products cho hợp lý
-			"Cup",
-			"Bottle",
-			"Glass",
-		},
+		"service":  "product-service",
+		"products": []string{"Cup", "Bottle", "Glass"},
+	})
+}
+
+func crash(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{"message": "product-service is crashing for demo"})
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		os.Exit(1)
+	}()
+}
+
+func stress(w http.ResponseWriter, r *http.Request) {
+	block := make([]byte, 8*1024*1024)
+	for i := range block {
+		block[i] = byte(i)
+	}
+
+	stressMu.Lock()
+	stressPayload = append(stressPayload, block)
+	allocatedMB := len(stressPayload) * 8
+	stressMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":      "product-service accepted stress memory block",
+		"allocated_mb": allocatedMB,
 	})
 }
 
 func main() {
-	// 1. Đọc cấu hình từ Docker (Nếu chạy local thì dùng giá trị mặc định)
-	registryURL := os.Getenv("REGISTRY_URL")
+	registryURL := os.Getenv("REGISTRY_URLS")
 	if registryURL == "" {
-		registryURL = "http://127.0.0.1:8880/api/register"
+		registryURL = os.Getenv("REGISTRY_URL")
+	}
+	if registryURL == "" {
+		registryURL = "http://127.0.0.1:8880/api/register,http://127.0.0.1:8890/api/register"
 	}
 
 	myHost := os.Getenv("SERVICE_HOST")
@@ -33,17 +67,15 @@ func main() {
 
 	myPort := os.Getenv("SERVICE_PORT")
 	if myPort == "" {
-		myPort = "9002" // Cổng 9002 của bạn
+		myPort = "9002"
 	}
 
-	// 2. Gọi hàm tự động báo danh chạy ngầm (liên kết với discovery.go)
 	go autoRegister(myHost, myPort, registryURL)
 
-	// 3. Khởi chạy HTTP Server
+	http.HandleFunc("/crash", crash)
+	http.HandleFunc("/stress", stress)
 	http.HandleFunc("/", products)
 
-	println("Product Service đang chạy tại cổng :" + myPort)
-
-	// Truyền biến myPort vào đây thay vì viết cứng ":9002"
+	println("Product Service is running on port :" + myPort)
 	http.ListenAndServe(":"+myPort, nil)
 }

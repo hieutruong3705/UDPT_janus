@@ -1,54 +1,88 @@
 services:
   user-service:
     build: ./user-service
+    mem_limit: 64m
+    cpus: "0.25"
     ports:
       - "9001:9001"
     environment:
-      - REGISTRY_URL=http://janus-gateway:8880/api/register
+      - REGISTRY_URLS=http://janus-gateway-1:8880/api/register,http://janus-gateway-2:8880/api/register
       - SERVICE_HOST=user-service
       - SERVICE_PORT=9001
 
   product-service-1:
     build: ./product-service
+    mem_limit: 64m
+    cpus: "0.25"
     ports:
       - "9002:9002"
     environment:
-      - REGISTRY_URL=http://janus-gateway:8880/api/register
+      - REGISTRY_URLS=http://janus-gateway-1:8880/api/register,http://janus-gateway-2:8880/api/register
       - SERVICE_HOST=product-service-1
       - SERVICE_PORT=9002
 
   product-service-2:
     build: ./product-service
+    mem_limit: 64m
+    cpus: "0.25"
     ports:
       - "9022:9002"
     environment:
-      - REGISTRY_URL=http://janus-gateway:8880/api/register
+      - REGISTRY_URLS=http://janus-gateway-1:8880/api/register,http://janus-gateway-2:8880/api/register
       - SERVICE_HOST=product-service-2
       - SERVICE_PORT=9002
 
   order-service-1:
     build: ./order-service
+    mem_limit: 64m
+    cpus: "0.25"
     ports:
       - "9003:9003"
     environment:
-      - REGISTRY_URL=http://janus-gateway:8880/api/register
+      - REGISTRY_URLS=http://janus-gateway-1:8880/api/register,http://janus-gateway-2:8880/api/register
       - SERVICE_HOST=order-service-1
       - SERVICE_PORT=9003
 
   order-service-2:
     build: ./order-service
+    mem_limit: 64m
+    cpus: "0.25"
     ports:
       - "9033:9003"
     environment:
-      - REGISTRY_URL=http://janus-gateway:8880/api/register
+      - REGISTRY_URLS=http://janus-gateway-1:8880/api/register,http://janus-gateway-2:8880/api/register
       - SERVICE_HOST=order-service-2
       - SERVICE_PORT=9003
 
-  janus-gateway:
+  janus-gateway-1:
     build: ./janus
+    mem_limit: 160m
+    cpus: "0.50"
     ports:
       - "8888:8080"
       - "8880:8880"
+    environment:
+      - JANUS_NODE_ID=janus-1
+      - JANUS_PEERS=janus-2=http://janus-gateway-2:8880
+    volumes:
+      - ./janus-config:/etc/janus
+    depends_on:
+      - user-service
+      - product-service-1
+      - product-service-2
+      - order-service-1
+      - order-service-2
+
+  janus-gateway-2:
+    build: ./janus
+    mem_limit: 160m
+    cpus: "0.50"
+    ports:
+      - "8898:8080"
+      - "8890:8880"
+    environment:
+      - JANUS_NODE_ID=janus-2
+      - JANUS_PEERS=janus-1=http://janus-gateway-1:8880
     volumes:
       - ./janus-config:/etc/janus
     depends_on:

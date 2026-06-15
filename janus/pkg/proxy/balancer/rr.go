@@ -1,6 +1,9 @@
 package balancer
 
-import "sync"
+import (
+	"net/url"
+	"sync"
+)
 
 var (
 	ActiveNodes = make(map[string]bool)
@@ -52,5 +55,22 @@ func isTargetAlive(target string) bool {
 	}
 
 	isAlive, ok := ActiveNodes[target]
+	if ok {
+		return isAlive
+	}
+
+	isAlive, ok = ActiveNodes[targetHealthKey(target)]
 	return ok && isAlive
+}
+
+func targetHealthKey(target string) string {
+	u, err := url.Parse(target)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return target
+	}
+
+	u.Path = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
 }

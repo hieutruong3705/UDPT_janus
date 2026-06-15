@@ -96,5 +96,48 @@
                 "enabled": true
             }
         ]
+    },
+    {
+        "name": "product-stress-api",
+        "active": true,
+        "proxy": {
+            "listen_path": "/products/stress",
+            "strip_path": false,
+            "upstreams": {
+                "balancing": "roundrobin",
+                "targets": [
+                    {
+                        "target": "http://product-service-1:9002/stress"
+                    },
+                    {
+                        "target": "http://product-service-2:9002/stress"
+                    }
+                ]
+            },
+            "methods": [
+                "GET"
+            ]
+        },
+        "plugins": []
+    },
+    {
+        "name": "product-stress-one-api",
+        "active": true,
+        "proxy": {
+            "listen_path": "/products/stress-one",
+            "strip_path": false,
+            "upstreams": {
+                "balancing": "roundrobin",
+                "targets": [
+                    {
+                        "target": "http://product-service-1:9002/stress"
+                    }
+                ]
+            },
+            "methods": [
+                "GET"
+            ]
+        },
+        "plugins": []
     }
 ]

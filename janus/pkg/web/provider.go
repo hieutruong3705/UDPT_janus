@@ -95,9 +95,12 @@ func (s *Server) addInternalPublicRoutes(r router.Router) {
 
 	// Phan mo rong tu them: cac backend demo dung endpoint nay de tu dang ky
 	// truc tiep vao Janus. Cac route nay thay the registry-service rieng le
-	// trong phan thuc nghiem.
+	// trong phan thuc nghiem. /cluster/status dung de xem leader hien tai.
 	r.POST("/api/register", RegisterServiceHandler())
 	r.GET("/api/services", ListServicesHandler())
+	r.GET("/cluster/status", ClusterStatusHandler())
+	r.POST("/cluster/crash", ClusterCrashHandler())
+	r.GET("/cluster/stress", ClusterStressHandler())
 
 	if obs.PrometheusExporter != nil {
 		r.Any("/metrics", obs.PrometheusExporter.ServeHTTP)
