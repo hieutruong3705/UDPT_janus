@@ -23,7 +23,7 @@ func main() {
 	// 1. Đọc cấu hình từ Docker (Nếu chạy local thì dùng giá trị mặc định)
 	registryURL := os.Getenv("REGISTRY_URL")
 	if registryURL == "" {
-		registryURL = "http://127.0.0.1:8080/api/register"
+		registryURL = "http://127.0.0.1:8880/api/register"
 	}
 
 	myHost := os.Getenv("SERVICE_HOST")

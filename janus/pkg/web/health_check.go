@@ -2,68 +2,147 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
+	"sort"
+	"sync"
 	"time"
 
-	"github.com/hellofresh/janus/pkg/proxy/balancer" // Gọi anh Bảo vệ vào
+	"github.com/hellofresh/janus/pkg/proxy/balancer"
 	log "github.com/sirupsen/logrus"
 )
 
-type HealthInfo struct {
-	Status  string `json:"status"`
-	Latency string `json:"latency,omitempty"`
+type RegisterRequest struct {
+	IP   string `json:"ip"`
+	Port string `json:"port"`
 }
 
-var targetServices = map[string]string{
-	"user-service":      "http://user-service:9001/users",
-	"product-service-1": "http://product-service-1:9002/products",
-	"product-service-2": "http://product-service-2:9002/products",
-	"order-service-1":   "http://order-service-1:9003/orders",
-	"order-service-2":   "http://order-service-2:9003/orders",
+type serviceRegistryResponse struct {
+	Message     string   `json:"message"`
+	TotalActive int      `json:"total_active"`
+	Services    []string `json:"services"`
 }
 
-func checkService(url string) HealthInfo {
-	client := http.Client{Timeout: 1 * time.Second}
-	start := time.Now()
-	resp, err := client.Get(url)
-	latency := time.Since(start).Round(time.Millisecond).String()
+var (
+	registryMu      sync.RWMutex
+	registeredNodes = make(map[string]bool)
+)
 
-	if err != nil || resp.StatusCode >= 500 {
-		return HealthInfo{Status: "DOWN"}
+func RegisterServiceHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req RegisterRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		backendURL := normalizeServiceURL(fmt.Sprintf("http://%s:%s", req.IP, req.Port))
+
+		registryMu.Lock()
+		_, exists := registeredNodes[backendURL]
+		registeredNodes[backendURL] = true
+		registryMu.Unlock()
+
+		if !exists {
+			log.Infof("[Registry] Node joined: %s", backendURL)
+		}
+
+		syncBalancerHealth()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"message": "registered"})
 	}
-	defer resp.Body.Close()
+}
 
-	return HealthInfo{Status: "UP", Latency: latency}
+func ListServicesHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		services := activeServices()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(serviceRegistryResponse{
+			Message:     "active services",
+			TotalActive: len(services),
+			Services:    services,
+		})
+	}
+}
+
+func normalizeServiceURL(service string) string {
+	u, err := url.Parse(service)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return service
+	}
+
+	u.Path = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
+}
+
+func activeServices() []string {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+
+	services := make([]string, 0, len(registeredNodes))
+	for service := range registeredNodes {
+		services = append(services, service)
+	}
+	sort.Strings(services)
+
+	return services
+}
+
+func syncBalancerHealth() {
+	services := activeServices()
+	active := make(map[string]bool, len(services))
+	for _, service := range services {
+		active[service] = true
+	}
+
+	balancer.HealthMutex.Lock()
+	defer balancer.HealthMutex.Unlock()
+
+	for service, wasAlive := range balancer.ActiveNodes {
+		if wasAlive && !active[service] {
+			log.Warnf("[Health Check] FAILURE: %s was removed from registry. Marked as DOWN.", service)
+		}
+		balancer.ActiveNodes[service] = false
+	}
+
+	for service := range active {
+		if !balancer.ActiveNodes[service] {
+			log.Infof("[Health Check] RECOVERY: %s is active in registry.", service)
+		}
+		balancer.ActiveNodes[service] = true
+	}
 }
 
 func StartActiveHealthCheck() {
-	// Ghi trạng thái ban đầu vào sổ tay của balancer
-	for name := range targetServices {
-		balancer.HealthMutex.Lock()
-		balancer.ActiveNodes[name] = true
-		balancer.HealthMutex.Unlock()
-	}
+	client := &http.Client{Timeout: 2 * time.Second}
 
 	go func() {
-		log.Info("[Health Check] Starting background monitoring...")
+		log.Info("[Health Check] Starting Janus internal backend registry monitoring...")
 
 		for {
-			for name, url := range targetServices {
-				info := checkService(url)
-				isAlive := (info.Status == "UP")
+			for _, service := range activeServices() {
+				resp, err := client.Get(service)
+				if resp != nil {
+					resp.Body.Close()
+				}
 
-				// Mượn sổ tay của balancer để ghi chép
-				balancer.HealthMutex.Lock()
-				wasAlive := balancer.ActiveNodes[name]
-				balancer.ActiveNodes[name] = isAlive
-				balancer.HealthMutex.Unlock()
-
-				if wasAlive && !isAlive {
-					log.Warnf("[Health Check] FAILURE: %s is unreachable. Marked as DOWN.", name)
-				} else if !wasAlive && isAlive {
-					log.Infof("[Health Check] RECOVERY: %s is back online.", name)
+				if err != nil || resp.StatusCode != http.StatusOK {
+					registryMu.Lock()
+					if registeredNodes[service] {
+						delete(registeredNodes, service)
+						log.Warnf("[Registry] Auto removed unreachable node: %s", service)
+					}
+					registryMu.Unlock()
 				}
 			}
+
+			syncBalancerHealth()
 			time.Sleep(5 * time.Second)
 		}
 	}()
@@ -73,13 +152,12 @@ func HealthCheckHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		results := make(map[string]string)
 
-		// Đọc trực tiếp từ sổ tay của balancer
 		balancer.HealthMutex.RLock()
-		for name, isAlive := range balancer.ActiveNodes {
+		for service, isAlive := range balancer.ActiveNodes {
 			if isAlive {
-				results[name] = "UP"
+				results[service] = "UP"
 			} else {
-				results[name] = "DOWN"
+				results[service] = "DOWN"
 			}
 		}
 		balancer.HealthMutex.RUnlock()

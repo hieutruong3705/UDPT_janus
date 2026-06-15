@@ -14,12 +14,16 @@ func autoRegister(myIP, myPort, registryURL string) {
 
 	for {
 		resp, err := http.Post(registryURL, "application/json", bytes.NewBuffer(jsonData))
-		if err == nil && resp.StatusCode == http.StatusOK {
-			fmt.Println("✅ [User-Service] Đã báo danh thành công với Registry!")
+		if resp != nil {
 			resp.Body.Close()
-			break
 		}
-		fmt.Println("⏳ [User-Service] Đang tìm Registry để báo danh...")
+
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			fmt.Println("[User-Service] Registry heartbeat sent")
+		} else {
+			fmt.Println("[User-Service] Waiting for Registry...")
+		}
+
 		time.Sleep(3 * time.Second)
 	}
 }

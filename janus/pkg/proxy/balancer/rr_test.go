@@ -12,6 +12,10 @@ type RoundRobinTestSuite struct {
 }
 
 func (suite *RoundRobinTestSuite) SetupTest() {
+	HealthMutex.Lock()
+	ActiveNodes = make(map[string]bool)
+	HealthMutex.Unlock()
+
 	suite.hosts = []*Target{
 		{Target: "127.0.0.1", Weight: 5},
 		{Target: "http://test.com", Weight: 10},

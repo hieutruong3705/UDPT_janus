@@ -1,11 +1,7 @@
 package balancer
 
-import (
-	"strings"
-	"sync"
-)
+import "sync"
 
-// ActiveNodes và HealthMutex
 var (
 	ActiveNodes = make(map[string]bool)
 	HealthMutex sync.RWMutex
@@ -14,7 +10,7 @@ var (
 type (
 	// RoundrobinBalancer balancer
 	RoundrobinBalancer struct {
-		current int // current backend position
+		current int
 		mu      sync.RWMutex
 	}
 )
@@ -30,7 +26,6 @@ func (b *RoundrobinBalancer) Elect(hosts []*Target) (*Target, error) {
 		return nil, ErrEmptyBackendList
 	}
 
-	// Lặp tối đa qua tất cả các host để tìm node CÒN SỐNG
 	for i := 0; i < len(hosts); i++ {
 		b.mu.Lock()
 		if b.current >= len(hosts) {
@@ -40,25 +35,22 @@ func (b *RoundrobinBalancer) Elect(hosts []*Target) (*Target, error) {
 		b.current++
 		b.mu.Unlock()
 
-		// Đọc sổ tay Health Check xem node này có bị DOWN không
-		isAlive := true
-		HealthMutex.RLock()
-		for name, status := range ActiveNodes {
-			// So khớp tên (vd: product-service-1) với đích đến
-			if strings.Contains(host.Target, name) {
-				isAlive = status
-				break
-			}
-		}
-		HealthMutex.RUnlock()
-
-		// CHÌA KHÓA Ở ĐÂY: Nếu node còn sống -> Chọn luôn!
-		// Nếu đã chết -> Vòng lặp sẽ tự động bỏ qua và thử tìm node tiếp theo.
-		if isAlive {
+		if isTargetAlive(host.Target) {
 			return host, nil
 		}
 	}
 
-	// Nếu lặp qua hết mà tất cả các node đều chết sạch
 	return nil, ErrEmptyBackendList
+}
+
+func isTargetAlive(target string) bool {
+	HealthMutex.RLock()
+	defer HealthMutex.RUnlock()
+
+	if len(ActiveNodes) == 0 {
+		return true
+	}
+
+	isAlive, ok := ActiveNodes[target]
+	return ok && isAlive
 }

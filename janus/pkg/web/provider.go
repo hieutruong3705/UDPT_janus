@@ -53,6 +53,9 @@ func (s *Server) Start() error {
 
 	s.AddRoutes(r)
 	plugin.EmitEvent(plugin.AdminAPIStartupEvent, plugin.OnAdminAPIStartup{Router: r})
+
+	// Phan mo rong tu them: khoi dong bo kiem tra suc khoe backend noi bo.
+	// Day khong phai la chuc nang goc cua Janus Admin API.
 	StartActiveHealthCheck()
 	return nil
 }
@@ -89,6 +92,13 @@ func (s *Server) addInternalPublicRoutes(r router.Router) {
 	r.GET("/status", NewOverviewHandler(s.apiHandler.Cfgs))
 	r.GET("/status/{name}", NewStatusHandler(s.apiHandler.Cfgs))
 	r.GET("/health", HealthCheckHandler())
+
+	// Phan mo rong tu them: cac backend demo dung endpoint nay de tu dang ky
+	// truc tiep vao Janus. Cac route nay thay the registry-service rieng le
+	// trong phan thuc nghiem.
+	r.POST("/api/register", RegisterServiceHandler())
+	r.GET("/api/services", ListServicesHandler())
+
 	if obs.PrometheusExporter != nil {
 		r.Any("/metrics", obs.PrometheusExporter.ServeHTTP)
 	}
