@@ -139,5 +139,26 @@
             ]
         },
         "plugins": []
+    },
+    {
+        "name": "notification-api",
+        "active": true,
+        "proxy": {
+            "listen_path": "/notifications/*",
+            "strip_path": true,
+            "upstreams": {
+                "balancing": "roundrobin",
+                "targets": [
+                    {
+                        "target": "http://127.0.0.1:8880/notifications"
+                    }
+                ]
+            },
+            "methods": [
+                "GET",
+                "POST"
+            ]
+        },
+        "plugins": []
     }
 ]

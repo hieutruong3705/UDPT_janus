@@ -47,6 +47,10 @@ func (b *RoundrobinBalancer) Elect(hosts []*Target) (*Target, error) {
 }
 
 func isTargetAlive(target string) bool {
+	if isLocalTarget(target) {
+		return true
+	}
+
 	HealthMutex.RLock()
 	defer HealthMutex.RUnlock()
 
@@ -73,4 +77,14 @@ func targetHealthKey(target string) string {
 	u.RawQuery = ""
 	u.Fragment = ""
 	return u.String()
+}
+
+func isLocalTarget(target string) bool {
+	u, err := url.Parse(target)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return false
+	}
+
+	host := u.Hostname()
+	return host == "127.0.0.1" || host == "localhost" || host == "::1"
 }

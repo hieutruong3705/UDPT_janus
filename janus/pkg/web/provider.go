@@ -102,6 +102,16 @@ func (s *Server) addInternalPublicRoutes(r router.Router) {
 	r.POST("/cluster/crash", ClusterCrashHandler())
 	r.GET("/cluster/stress", ClusterStressHandler())
 
+	// Phan mo rong tu them: Janus Notification Hub nhan/phat su kien realtime.
+	// Cac endpoint nay nam trong Janus goc va co the duoc goi qua gateway
+	// bang route /notifications/* trong file janus-config/apis/routes.json.
+	r.GET("/notifications", NotificationInfoHandler())
+	r.POST("/notifications/publish", NotificationPublishHandler())
+	r.POST("/notifications/replicate", NotificationReplicateHandler())
+	r.GET("/notifications/subscribe", NotificationSubscribeHandler())
+	r.GET("/notifications/history", NotificationHistoryHandler())
+	r.GET("/notifications/stats", NotificationStatsHandler())
+
 	if obs.PrometheusExporter != nil {
 		r.Any("/metrics", obs.PrometheusExporter.ServeHTTP)
 	}
